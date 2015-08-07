@@ -18,6 +18,10 @@
 
 package org.jboss.pnc.buildagent;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Optional;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -25,10 +29,10 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Optional;
+import org.jboss.pnc.buildagent.moduleconfig.BuildAgentModuleConfig;
+import org.jboss.pnc.common.Configuration;
+import org.jboss.pnc.common.json.ConfigurationParseException;
+import org.jboss.pnc.common.json.moduleprovider.BAConfigProvider;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -37,7 +41,8 @@ public class Main {
     private static final String DEFAULT_HOST = "localhost";
     private static final String DEFAULT_PORT = "8080";
 
-    public static void main(String[] args) throws ParseException, BuildAgentException, InterruptedException {
+    public static void main(String[] args) throws ParseException, BuildAgentException, InterruptedException, 
+                                                    ConfigurationParseException, Exception {
         Options options = new Options();
         options.addOption("b", true, "Address to bind. When not specified " + DEFAULT_HOST + " is used as default.");
         options.addOption("p", true, "Port to bind. When not specified " + DEFAULT_PORT + " is used as default.");
@@ -63,6 +68,31 @@ public class Main {
         } else {
             logPath = Optional.empty();
         }
+        
+        // use configuration here
+        Configuration configuration = new Configuration();
+        BuildAgentModuleConfig config = configuration
+                .getModuleConfig(new BAConfigProvider<BuildAgentModuleConfig>(BuildAgentModuleConfig.class));
+        String ba_oauth_username = config.getUsername();
+        String ba_oauth_password = config.getPassword();
+        String baseRestURL = config.getBaseAuthUrl(); 
+
+        if(ba_oauth_password == null || 
+            ba_oauth_username == null ||
+            ba_oauth_password.equals("") ||
+            ba_oauth_username.equals("")) {
+                throw new Exception("Wrong configuration");
+        }
+        
+        // TODO OAuth2 releated code here
+        System.out.println(">>> BA configuration <<<");
+        System.out.println(">>> BA username: " + ba_oauth_username);
+        String print_pwd = "not given";
+        if(ba_oauth_password.length() > 0 ) {
+            print_pwd = "given ****";
+        } 
+        System.out.println(">>> BA password: " + print_pwd);
+        
         new BuildAgent().start(host, port, logPath, null);
     }
 

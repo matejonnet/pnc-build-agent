@@ -1,0 +1,10 @@
+{
+"@class":"ModuleConfigJson","name":"pnc-config",
+        "configs":[
+          {
+            "@module-config":"build-agent-config",
+            "username":"${env.BA_OAUTH_USERNAME}",
+            "password":"${env.BA_OAUTH_PASSWORD}"
+          }
+        ]
+}
