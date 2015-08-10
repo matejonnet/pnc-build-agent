@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent;
 
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
@@ -29,10 +30,12 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.jboss.pnc.buildagent.auth.SimpleOAuthConnect;
 import org.jboss.pnc.buildagent.moduleconfig.BuildAgentModuleConfig;
 import org.jboss.pnc.common.Configuration;
 import org.jboss.pnc.common.json.ConfigurationParseException;
 import org.jboss.pnc.common.json.moduleprovider.BAConfigProvider;
+import org.keycloak.representations.AccessToken;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -75,25 +78,45 @@ public class Main {
                 .getModuleConfig(new BAConfigProvider<BuildAgentModuleConfig>(BuildAgentModuleConfig.class));
         String ba_oauth_username = config.getUsername();
         String ba_oauth_password = config.getPassword();
-        String baseRestURL = config.getBaseAuthUrl(); 
+        String baseAuthURL = config.getBaseAuthUrl(); 
 
         if(ba_oauth_password == null || 
             ba_oauth_username == null ||
+            baseAuthURL == null ||
             ba_oauth_password.equals("") ||
-            ba_oauth_username.equals("")) {
+            ba_oauth_username.equals("") || 
+            baseAuthURL.equals("")) {
                 throw new Exception("Wrong configuration");
         }
         
         // TODO OAuth2 releated code here
         System.out.println(">>> BA configuration <<<");
+        System.out.println(">>> BA base auth URL: " + baseAuthURL);
         System.out.println(">>> BA username: " + ba_oauth_username);
         String print_pwd = "not given";
         if(ba_oauth_password.length() > 0 ) {
             print_pwd = "given ****";
         } 
         System.out.println(">>> BA password: " + print_pwd);
+        boolean authenticated = false;
         
-        new BuildAgent().start(host, port, logPath, null);
+        InputStream is = Main.class.getResourceAsStream("/keycloak.json");
+        SimpleOAuthConnect oAuth = new SimpleOAuthConnect(is);
+        String accessToken = oAuth
+                .getAccessToken(baseAuthURL, 
+                        oAuth.getKeycloakDeployment().getResourceName(), 
+                        ba_oauth_username,
+                        ba_oauth_password);
+        AccessToken token = oAuth.authenticateToken(accessToken);
+        if(token != null) {
+            System.out.println(">>> Authentication success! <<<");
+            System.out.println(">>> Welcome! " +token.getPreferredUsername() + " at Build Agent server <<<");
+            new BuildAgent().start(host, port, logPath, null);
+        }
+        else {
+            System.out.println(">>> Can not start up NOT authenticated instance! <<<");
+            System.out.println(">>> Please provide the correct credentals and try again. <<<");
+        }
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {
