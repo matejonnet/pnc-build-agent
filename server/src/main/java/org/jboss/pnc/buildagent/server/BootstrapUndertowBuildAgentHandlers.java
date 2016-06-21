@@ -65,7 +65,7 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
         this.bindPath = bindPath;
     }
 
-    public void bootstrap(final Consumer<Boolean> completionHandler) {
+    public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
 
         String servletPath = bindPath + "/servlet";
         String socketPath = bindPath + "/socket";
@@ -92,8 +92,7 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
         try {
             servletHandler = manager.start();
         } catch (ServletException e) {
-            //TODO throw new BuildAgentException("Cannot deploy servlets.", e);
-            e.printStackTrace();
+            throw new BuildAgentException("Cannot deploy servlets.", e);
         }
 
         PathHandler pathHandler = Handlers.path()
@@ -156,35 +155,6 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
             exchange.getResponseSender().send(jsonString);
         };
     }
-
-//    private HttpHandler getWebSocketHandler(String invokerContext, Optional<String> sessionId) {
-//        WebSocketConnectionCallback onWebSocketConnected = (exchange, webSocketChannel) -> {
-//            if (sessionId.isPresent()) {
-//                //TODO Optional<TerminalSession> sessionCandidate = activeSessions.values().stream().findFirst();
-//                //if (sessionCandidate.isPresent()) {
-//                //    sessionCandidate.get().addListener(webSocketChannel);
-//                //} else {
-//                //    log.warn("Client is trying to connect to non existing session.");
-//                //}
-//                terminalSession.addListener(webSocketChannel);
-//                log.debug("New socket listener added to an existing session.");
-//            } else {
-//                terminalSession = new TerminalSession(buildAgent.getLogFolder());
-//                //activeSessions.put(terminalSession.getId(), terminalSession); //TODO destroy and remove session when there is no connection and no running task
-//
-//                WebSocketTtyConnection conn = new WebSocketTtyConnection(webSocketChannel, terminalSession, executor);
-//                terminalSession.addListener(webSocketChannel);
-//                buildAgent.newTtyConnection(conn);
-//                log.debug("New session created and socket listener added to it.");
-//            }
-//            webSocketChannel.addCloseTask(channel -> {
-//                terminalSession.removeListener(webSocketChannel);
-//            });
-//        };
-//
-//        HttpHandler webSocketHandshakeHandler = new WebSocketProtocolHandshakeHandler(onWebSocketConnected);
-//        return webSocketHandshakeHandler;
-//    }
 
     private String getManifestInformation() {
         String result = "";

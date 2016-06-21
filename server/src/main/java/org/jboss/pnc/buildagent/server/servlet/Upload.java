@@ -26,6 +26,7 @@ import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
@@ -38,11 +39,20 @@ public class Upload extends HttpServlet {
 
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        log.debug("Received new file upload request.");
+        log.info("Received new file upload request.");
         int fileSize = request.getContentLength();
+        log.debug("File size: {}.", fileSize);
         String fileDestination = request.getPathInfo();
         if (!fileDestination.startsWith("/")) {
             fileDestination = "/" + fileDestination;
+        }
+        log.debug("File destination: {}.", fileDestination);
+
+        File targetFile = new File(fileDestination);
+
+        File dir = new File(targetFile.getParent());
+        if (!dir.exists()) {
+            dir.mkdirs();
         }
 
         int totalBytes = 0;

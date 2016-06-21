@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.pnc.buildagent.api.ResponseMode;
@@ -32,8 +33,11 @@ import javax.websocket.RemoteEndpoint;
 import javax.websocket.Session;
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -51,30 +55,20 @@ public class BuildAgentClient implements Closeable {
 
     ObjectWrapper<Boolean> isCommandPromptReady = new ObjectWrapper<>(false);
 
-    Client statusUpdatesClient;
-    Client commandExecutingClient;
+    private Client statusUpdatesClient;
+    private Client commandExecutingClient;
+    private Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
+    private boolean commandSent;
 
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+    public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
                             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
                             String commandContext
                         ) throws TimeoutException, InterruptedException {
-        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, commandContext, ResponseMode.BINARY, false);
+        this(termBaseUrl, responseDataConsumer, onStatusUpdate, commandContext, ResponseMode.BINARY, false);
     }
 
-    /**
-     * @deprecated Use commandContext instead of sessionId
-     */
-    @Deprecated
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
-                            Optional<Consumer<String>> responseDataConsumer,
-                            Consumer<TaskStatusUpdateEvent> onStatusUpdate,
-                            String context,
-                            Optional<String> sessionId) throws TimeoutException, InterruptedException {
-        this(termSocketBaseUrl, statusUpdatesSocketBaseUrl, responseDataConsumer, onStatusUpdate, context, ResponseMode.BINARY, false);
-    }
-
-    public BuildAgentClient(String termSocketBaseUrl, String statusUpdatesSocketBaseUrl,
+    public BuildAgentClient(String termBaseUrl,
             Optional<Consumer<String>> responseDataConsumer,
             Consumer<TaskStatusUpdateEvent> onStatusUpdate,
             String commandContext,
@@ -88,14 +82,19 @@ public class BuildAgentClient implements Closeable {
             onStatusUpdate.accept(event);
         };
 
-        statusUpdatesClient = connectStatusListenerClient(statusUpdatesSocketBaseUrl, onStatusUpdateInternal, commandContext);
-        commandExecutingClient = connectCommandExecutingClient(termSocketBaseUrl, responseDataConsumer, commandContext);
+        statusUpdatesClient = connectStatusListenerClient(termBaseUrl, onStatusUpdateInternal, commandContext);
+        commandExecutingClient = connectCommandExecutingClient(termBaseUrl, responseDataConsumer, commandContext);
     }
 
-    public void executeCommand(String command) throws TimeoutException {
-        log.info("Executing remote command ...");
+    public void setCommandCompletionListener(Runnable commandCompletionListener) {
+        this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
+    }
+
+    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException {
+        log.info("Executing remote command [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
-        String data = "{\"action\":\"read\",\"data\":\"" + command + "\\n\"}";
+
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
 
         try {
             waitCommandPromptReady();
@@ -104,11 +103,53 @@ public class BuildAgentClient implements Closeable {
         }
 
         try {
-            remoteEndpoint.sendBinary(ByteBuffer.wrap(data.getBytes()));
+            log.debug("Sending remote command...");
+            remoteEndpoint.sendBinary(byteBuffer);
             isCommandPromptReady.set(false);
+            commandSent = true;
         } catch (IOException e) {
             log.error("Cannot execute remote command.", e);
         }
+    }
+
+    public void executeNow(Object command) throws BuildAgentClientException { //TODO unify with executeCommand
+        log.info("Executing remote command [{}]...", command);
+        RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
+
+        ByteBuffer byteBuffer = prepareRemoteCommand(command);
+
+        try {
+            log.debug("Sending remote command...");
+            remoteEndpoint.sendBinary(byteBuffer);
+            isCommandPromptReady.set(false);
+            commandSent = true;
+        } catch (IOException e) {
+            log.error("Cannot execute remote command.", e);
+        }
+    }
+
+    private ByteBuffer prepareRemoteCommand(Object command) throws BuildAgentClientException {
+        Map<String, Object> cmdJson = new HashMap<>();
+        cmdJson.put("action", "read");
+
+        ByteBuffer byteBuffer;
+        if (command instanceof String) {
+            cmdJson.put("data", command + "\n");
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                byteBuffer = ByteBuffer.wrap(mapper.writeValueAsBytes(cmdJson));
+            } catch (JsonProcessingException e) {
+                throw new BuildAgentClientException("Cannot serialize string command.", e);
+            }
+        } else {
+            try {
+                byteBuffer = ByteBuffer.allocate(1).put(((Integer)command).byteValue());
+            } catch (BufferOverflowException | ClassCastException e) {
+                throw new BuildAgentClientException("Invalid signal.", e);
+            }
+            byteBuffer.flip();
+        }
+        return byteBuffer;
     }
 
     private Client connectStatusListenerClient(String webSocketBaseUrl, Consumer<TaskStatusUpdateEvent> onStatusUpdate, String commandContext) {
@@ -135,8 +176,10 @@ public class BuildAgentClient implements Closeable {
         client.onClose(closeReason -> {
         });
 
+        commandContext = formatCommandContext(commandContext);
+
         try {
-            client.connect(webSocketBaseUrl + Client.WEB_SOCKET_LISTENER_PATH + "/" + commandContext);
+            client.connect(stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_LISTENER_PATH + commandContext);
         } catch (Exception e) {
             throw new AssertionError("Failed to connect to remote client.", e);
         }
@@ -161,14 +204,12 @@ public class BuildAgentClient implements Closeable {
 
         String webSocketPath;
         if (ResponseMode.TEXT.equals(responseMode)) {
-            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_TEXT_PATH;
         } else {
-            webSocketPath = webSocketBaseUrl + Client.WEB_SOCKET_TERMINAL_PATH;
+            webSocketPath = stripEndingSlash(webSocketBaseUrl) + Client.WEB_SOCKET_TERMINAL_PATH;
         }
 
-        if (commandContext != null && !commandContext.equals("")) {
-            commandContext = "/" + commandContext;
-        }
+        commandContext = formatCommandContext(commandContext);
 
         try {
             client.connect(webSocketPath + commandContext + appendReadOnly);
@@ -178,12 +219,23 @@ public class BuildAgentClient implements Closeable {
         return client;
     }
 
+    private String formatCommandContext(String commandContext) {
+        if (commandContext != null && !commandContext.equals("")) {
+            commandContext = "/" + commandContext;
+        }
+        return commandContext;
+    }
+
+    private String stripEndingSlash(String path) {
+        return path.replaceAll("/$", "");
+    }
+
     private void registerBinaryResponseConsumer(Optional<Consumer<String>> responseDataConsumer, Client client) {
         Consumer<byte[]> responseConsumer = (bytes) -> {
             String responseData = new String(bytes);
             if ("% ".equals(responseData)) {
                 log.info("Binary consumer received command line 'ready'(%) marker.");
-                isCommandPromptReady.set(true);
+                onCommandPromptReady();
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(responseData));;
             }
@@ -195,7 +247,7 @@ public class BuildAgentClient implements Closeable {
         Consumer<String> responseConsumer = (string) -> {
             if ("% ".equals(string)) {
                 log.info("Text consumer received command line 'ready'(%) marker.");
-                isCommandPromptReady.set(true);
+                onCommandPromptReady();
             } else {
                 responseDataConsumer.ifPresent((rdc) -> rdc.accept(string));;
             }
@@ -203,9 +255,16 @@ public class BuildAgentClient implements Closeable {
         client.onStringMessage(responseConsumer);
     }
 
+    private void onCommandPromptReady() {
+        isCommandPromptReady.set(true);
+        if (commandSent) {
+            onCommandExecutionCompleted.ifPresent((completed) -> completed.run());
+        }
+    }
+
     private void waitCommandPromptReady() throws TimeoutException, InterruptedException {
         log.trace("Waiting for commandPromptReady ... ");
-        Wait.forCondition(() -> isCommandPromptReady.get(), 10, ChronoUnit.SECONDS, "Command prompt was not ready.");
+        Wait.forCondition(() -> isCommandPromptReady.get(), 15, ChronoUnit.SECONDS, "Command prompt was not ready.");
         log.debug("CommandPromptReady.");
     }
 

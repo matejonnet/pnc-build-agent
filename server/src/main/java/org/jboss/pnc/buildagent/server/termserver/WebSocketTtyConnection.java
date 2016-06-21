@@ -19,12 +19,14 @@
 package org.jboss.pnc.buildagent.server.termserver;
 
 import io.termd.core.http.HttpTtyConnection;
+import io.termd.core.tty.TtyConnection;
 import io.termd.core.util.Vector;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedBinaryMessage;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
 import org.jboss.pnc.buildagent.api.ResponseMode;
+import org.jboss.pnc.buildagent.server.BuildAgentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.ChannelListener;
@@ -42,15 +44,20 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class WebSocketTtyConnection extends HttpTtyConnection {
+public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConnection {
 
     private static Logger log = LoggerFactory.getLogger(WebSocketTtyConnection.class);
+
     private WebSocketChannel webSocketChannel;
     private ResponseMode responseMode;
     private final ScheduledExecutorService executor;
     private Set<ReadOnlyChannel> readonlyChannels = new HashSet<>();
 
-    @Override
+    public WebSocketTtyConnection(ScheduledExecutorService executor) {
+        super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        this.executor = executor;
+    }
+
     protected void write(byte[] buffer) {
         if (isOpen()) {
             if (ResponseMode.TEXT.equals(responseMode)) {
@@ -72,11 +79,6 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         executor.schedule(task, delay, unit);
     }
 
-    public WebSocketTtyConnection(ScheduledExecutorService executor) {
-        super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        this.executor = executor;
-    }
-
     private void registerWebSocketChannelListener(WebSocketChannel webSocketChannel) {
         ChannelListener<WebSocketChannel> listener = new AbstractReceiveListener() {
 
@@ -87,9 +89,9 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
                 try {
                     ByteBuffer[] resource = pulledData.getResource();
                     ByteBuffer byteBuffer = WebSockets.mergeBuffers(resource);
-                    String msg = new String(byteBuffer.array());
-                    log.trace("Sending message to decoder: {}", msg);
-                    writeToDecoder(msg);
+                    writeToDecoder(byteBuffer);
+                } catch (BuildAgentException e) {
+                    log.error("Invalid request received.", e);
                 } finally {
                     pulledData.discard();
                 }
@@ -97,6 +99,16 @@ public class WebSocketTtyConnection extends HttpTtyConnection {
         };
         webSocketChannel.getReceiveSetter().set(listener);
     }
+
+    public void writeToDecoder(ByteBuffer byteBuffer) throws BuildAgentException {
+        if (byteBuffer.capacity() == 1) { //handle events
+            super.writeToDecoder(byteBuffer.array());
+        } else {
+            String msg = new String(byteBuffer.array());
+            super.writeToDecoder(msg);
+        }
+    }
+
 
     public boolean isOpen() {
         return webSocketChannel != null && webSocketChannel.isOpen();

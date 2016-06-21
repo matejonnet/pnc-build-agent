@@ -33,7 +33,7 @@
   </scm>
 
   <properties>
-    <version.io.termd>1.0.2</version.io.termd>
+    <version.io.termd>1.1.1-SNAPSHOT</version.io.termd>
     <version.undertow-websockets-jsr>1.2.6.Final</version.undertow-websockets-jsr>
     <version.junit>4.11</version.junit>
     <version.org.slf4j>1.7.7</version.org.slf4j>

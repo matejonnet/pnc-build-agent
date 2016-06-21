@@ -60,7 +60,11 @@ public class TermdServer {
         mutex.acquire();
         serverThread = new Thread(() -> {
             Optional<Path> logFolder = Optional.of(Paths.get("").toAbsolutePath());
-            new BuildAgent().start(host, port, bindPath, logFolder, onStart);
+            try {
+                new BuildAgent().start(host, port, bindPath, logFolder, onStart);
+            } catch (BuildAgentException e) {
+                throw new RuntimeException("Cannot start terminal server.", e);
+            }
         }, "termd-serverThread-thread");
         serverThread.start();
 

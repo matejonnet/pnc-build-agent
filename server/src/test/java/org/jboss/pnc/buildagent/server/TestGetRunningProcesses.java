@@ -66,7 +66,6 @@ public class TestGetRunningProcesses {
     @Test
     public void getRunningProcesses() throws Exception {
         String terminalUrl = "http://" + HOST + ":" + PORT;
-        String listenerUrl = "http://" + HOST + ":" + PORT;
 
         HttpURLConnection connection = retrieveProcessList();
         Assert.assertEquals(connection.getResponseMessage(), 200, connection.getResponseCode());
@@ -91,8 +90,7 @@ public class TestGetRunningProcesses {
             }
         };
 
-        //Client eventClient = BuildAgentClient.connectStatusListenerClient(listenerUrl, onStatusUpdate, context);
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, listenerUrl, Optional.empty(), onStatusUpdate, context, Optional.empty());
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalUrl, Optional.empty(), onStatusUpdate, context);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
         Supplier<Boolean> evaluationSupplier = () -> resultReceived.get();

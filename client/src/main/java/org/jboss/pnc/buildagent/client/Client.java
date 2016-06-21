@@ -30,7 +30,6 @@ import javax.websocket.MessageHandler;
 import javax.websocket.RemoteEndpoint;
 import javax.websocket.Session;
 import java.net.URI;
-import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 /**
@@ -90,7 +89,6 @@ public class Client {
     }
 
     public class ProgramaticClientEndpoint extends Endpoint {
-        final CountDownLatch closeLatch = new CountDownLatch(1); //TODO do we need latch ?
         volatile Session session;
 
         @Override

@@ -40,7 +40,7 @@ public class BuildAgent {
     IoLoggerChannel ioLoggerChannel;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
-    public void start(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) {
+    public void start(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) throws BuildAgentException {
         final int bindPort;
         if (port == 0) {
             bindPort = findFirstFreePort();

@@ -54,7 +54,6 @@ public class TestWebSocketConnectionWithBindPath {
     private static String bindPath = "/pnc-ba-test";;
 
     String terminalBaseUrl = "http://" + HOST + ":" + PORT + bindPath;
-    String listenerBaseUrl = "http://" + HOST + ":" + PORT + bindPath;
 
     @BeforeClass
     public static void setUP() throws Exception {
@@ -78,7 +77,7 @@ public class TestWebSocketConnectionWithBindPath {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
         Thread.sleep(1000); //make sure async command execution started
@@ -90,7 +89,6 @@ public class TestWebSocketConnectionWithBindPath {
         };
         BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
                 terminalBaseUrl,
-                listenerBaseUrl,
                 Optional.of(onResponse),
                 onStatusUpdate,
                 context,
@@ -113,7 +111,7 @@ public class TestWebSocketConnectionWithBindPath {
                 completed.set(true);
             }
         };
-        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, listenerBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.BINARY, false);
         buildAgentClient.executeCommand(TEST_COMMAND);
 
         Thread.sleep(1000); //make sure async command execution started
@@ -125,7 +123,6 @@ public class TestWebSocketConnectionWithBindPath {
         };
         BuildAgentClient buildAgentClientReconnected = new BuildAgentClient(
                 terminalBaseUrl,
-                listenerBaseUrl,
                 Optional.of(onResponse),
                 onStatusUpdate,
                 context,

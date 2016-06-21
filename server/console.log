@@ -1,5 +1,0 @@
-Welcome sir
-% java -cp ./target/test-classes/:./server/target/test-classes/ org.jboss.pnc.buildagent.server.MockProcess 1 500
-Hi there! I'm a long running process.
-I'll write to stdout test message 'Hello again!' 1 times with 500ms delay.
-0 : Hello again!

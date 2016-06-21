@@ -48,7 +48,7 @@ public class IoLogger implements Closeable {
             Path logPath = logFolder.resolve("console.log");
 
             log.info("Opening log file {}.", logPath);
-            stream = new FileOutputStream(logPath.toFile(), true); //TODO close stream
+            stream = new FileOutputStream(logPath.toFile(), true);
 
             inputLogger = (line) -> {
                 try {

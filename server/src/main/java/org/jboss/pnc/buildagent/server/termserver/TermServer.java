@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.server.termserver;
 
+import org.jboss.pnc.buildagent.server.BuildAgentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,11 @@ public class TermServer {
     TermServer termServer = new TermServer();
 
     serverThread = new Thread(() -> {
-      termServer.start("localhost", 0, onStart);
+      try {
+        termServer.start("localhost", 0, onStart);
+      } catch (BuildAgentException e) {
+        throw new RuntimeException("Cannot start terminal server.", e);
+      }
     });
     mutex.acquire();
     serverThread.start();
@@ -68,7 +73,7 @@ public class TermServer {
   }
 
 
-  public void start(String host, int portCandidate, Runnable onStart) {
+  public void start(String host, int portCandidate, Runnable onStart) throws BuildAgentException {
     if (portCandidate == 0) {
       portCandidate = findFirstFreePort();
     }

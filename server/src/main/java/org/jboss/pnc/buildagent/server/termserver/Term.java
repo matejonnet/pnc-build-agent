@@ -65,7 +65,7 @@ class Term {
 
         webSocketTtyConnection = new WebSocketTtyConnection(executor);
         appendReadOnlyChannel.ifPresent(ch -> webSocketTtyConnection.addReadonlyChannel(ch));
-        log.info("Creating new TtyBridge.");
+        log.debug("Creating new TtyBridge.");
     }
 
     private volatile Boolean ttyBridgeInitialized = false;

@@ -21,6 +21,7 @@ package org.jboss.pnc.buildagent.server.termserver;
 import io.undertow.Undertow;
 import io.undertow.server.HttpServerExchange;
 import org.jboss.pnc.buildagent.api.ResponseMode;
+import org.jboss.pnc.buildagent.server.BuildAgentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,7 @@ public class UndertowBootstrap {
         this.appendReadOnlyChannel = appendReadOnlyChannel;
     }
 
-    public void bootstrap(final Consumer<Boolean> completionHandler) {
+    public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
         server = Undertow.builder()
                 .addHttpListener(port, host)
                 .setHandler((exchange) -> handleWebSocketRequests(exchange, Configurations.TERM_PATH, Configurations.TERM_PATH_TEXT, Configurations.PROCESS_UPDATES_PATH))
