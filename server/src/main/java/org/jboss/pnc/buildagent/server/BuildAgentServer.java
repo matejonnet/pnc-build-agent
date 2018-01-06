@@ -18,8 +18,6 @@
 
 package org.jboss.pnc.buildagent.server;
 
-import org.jboss.pnc.buildagent.server.termserver.ReadOnlyChannel;
-import org.jboss.pnc.buildagent.server.termserver.UndertowBootstrap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,42 +31,47 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
   */
-public class BuildAgent {
+public class BuildAgentServer {
 
-    Logger log = LoggerFactory.getLogger(BuildAgent.class);
-    private UndertowBootstrap undertowBootstrap;
-    IoLoggerChannel ioLoggerChannel;
+    private final Logger log = LoggerFactory.getLogger(BuildAgentServer.class);
+    private final BootstrapUndertow undertowBootstrap;
+    private final IoLoggerChannel ioLoggerChannel;
     private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
 
-    public void start(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) throws BuildAgentException {
-        final int bindPort;
+    private final int port;
+    private final String host;
+
+    public BuildAgentServer(String host, final int port, String bindPath, Optional<Path> logPath, Runnable onStart) throws BuildAgentException {
+        this.host = host;
         if (port == 0) {
-            bindPort = findFirstFreePort();
+            this.port = findFirstFreePort();
         } else {
-            bindPort = port;
+            this.port = port;
         }
 
-        Optional<ReadOnlyChannel> ioLoggerChannelWrapper;
         if (logPath.isPresent()) {
             ioLoggerChannel = new IoLoggerChannel(logPath.get());
-            ioLoggerChannelWrapper = Optional.of(ioLoggerChannel);
         } else {
-            ioLoggerChannelWrapper = Optional.empty();
+            ioLoggerChannel = null;
         }
 
-        undertowBootstrap = new BootstrapUndertowBuildAgentHandlers(host, bindPort, executor, bindPath, ioLoggerChannelWrapper);
-
-        undertowBootstrap.bootstrap(completionHandler -> {
-            if (completionHandler) {
-                log.info("Server started on " + host + ":" + port);
-                if (onStart != null) {
-                    onStart.run();
+        undertowBootstrap = new BootstrapUndertow(
+                host,
+                this.port,
+                executor,
+                bindPath,
+                Optional.ofNullable(ioLoggerChannel),
+                completionHandler -> {
+                    if (completionHandler) {
+                        log.info("Server started on " + this.host + ":" + this.port);
+                        if (onStart != null) {
+                            onStart.run();
+                        }
+                    } else {
+                        log.info("Could not start server");
+                    }
                 }
-            } else {
-                log.info("Could not start server");
-            }
-        });
-
+        );
     }
 
     private int findFirstFreePort() {
@@ -81,11 +84,11 @@ public class BuildAgent {
 
 
     public int getPort() {
-        return undertowBootstrap.getPort();
+        return port;
     }
 
     public String getHost() {
-        return undertowBootstrap.getHost();
+        return host;
     }
 
     public void stop() {

@@ -27,13 +27,14 @@ import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
+import org.jboss.pnc.buildagent.api.Constants;
+import org.jboss.pnc.buildagent.api.ResponseMode;
 import org.jboss.pnc.buildagent.server.servlet.Download;
 import org.jboss.pnc.buildagent.server.servlet.Terminal;
 import org.jboss.pnc.buildagent.server.servlet.Upload;
 import org.jboss.pnc.buildagent.server.servlet.Welcome;
-import org.jboss.pnc.buildagent.server.termserver.Configurations;
 import org.jboss.pnc.buildagent.server.termserver.ReadOnlyChannel;
-import org.jboss.pnc.buildagent.server.termserver.UndertowBootstrap;
+import org.jboss.pnc.buildagent.server.termserver.Term;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,10 @@ import javax.servlet.ServletException;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import java.util.jar.Manifest;
@@ -53,26 +57,44 @@ import static io.undertow.servlet.Servlets.servlet;
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
+public class BootstrapUndertow {
 
+    private final Logger log = LoggerFactory.getLogger(BootstrapUndertow.class);
+
+    private final String host;
+    private final int port;
     private final String bindPath;
-    Logger log = LoggerFactory.getLogger(BootstrapUndertowBuildAgentHandlers.class);
+
     private Undertow server;
 
-    public BootstrapUndertowBuildAgentHandlers(String host, int port, ScheduledExecutorService executor, String bindPath, Optional<ReadOnlyChannel> ioLoggerChannel) {
-        super(host, port, executor, ioLoggerChannel);
+    private final ConcurrentHashMap<String, Term> terms = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService executor;
+    private final Optional<ReadOnlyChannel> appendReadOnlyChannel;
 
+    public BootstrapUndertow(
+            String host,
+            int port,
+            ScheduledExecutorService executor,
+            String bindPath,
+            Optional<ReadOnlyChannel> ioLoggerChannel,
+            Consumer<Boolean> completionHandler) throws BuildAgentException {
+        this.host = host;
+        this.port = port;
         this.bindPath = bindPath;
+
+        this.executor = executor;
+        this.appendReadOnlyChannel = ioLoggerChannel;
+
+        bootstrap(completionHandler);
     }
 
-    public void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
-
-        String servletPath = bindPath + "/servlet";
-        String socketPath = bindPath + "/socket";
-        String httpPath = bindPath + "/";
+    private void bootstrap(final Consumer<Boolean> completionHandler) throws BuildAgentException {
+        String servletPath = bindPath + Constants.SERVLET_PATH;
+        String socketPath = bindPath + Constants.SOCKET_PATH;
+        String httpPath = bindPath + Constants.HTTP_PATH;
 
         DeploymentInfo servletBuilder = deployment()
-                .setClassLoader(BootstrapUndertowBuildAgentHandlers.class.getClassLoader())
+                .setClassLoader(BootstrapUndertow.class.getClassLoader())
                 .setContextPath(servletPath)
                 .setDeploymentName("ROOT.war")
                 .addServlets(
@@ -97,11 +119,11 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
 
         PathHandler pathHandler = Handlers.path()
                 .addPrefixPath(servletPath, servletHandler)
-                .addPrefixPath(socketPath, exchange -> BootstrapUndertowBuildAgentHandlers.this.handleWebSocketRequests(exchange, socketPath))
-                .addPrefixPath(httpPath, exchange -> BootstrapUndertowBuildAgentHandlers.this.handleHttpRequests(exchange, httpPath));
+                .addPrefixPath(socketPath, exchange -> handleWebSocketRequests(exchange, socketPath))
+                .addPrefixPath(httpPath, exchange -> handleHttpRequests(exchange, httpPath));
 
         server = Undertow.builder()
-                .addHttpListener(getPort(), getHost())
+                .addHttpListener(port, host)
                 .setHandler(pathHandler)
                 .build();
 
@@ -110,14 +132,80 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
         completionHandler.accept(true);
     }
 
+    public void stop() {
+        if (server != null) {
+            server.stop();
+        }
+    }
+
     private void handleWebSocketRequests(HttpServerExchange exchange, String socketPath) throws Exception {
-        socketPath = stripEndingSlash(socketPath);
-        super.handleWebSocketRequests(
-                exchange,
-                socketPath + Configurations.TERM_PATH,
-                socketPath + Configurations.TERM_PATH_TEXT,
-                socketPath + Configurations.TERM_PATH_SILENT,
-                socketPath + Configurations.PROCESS_UPDATES_PATH);
+        String processUpdatePath = socketPath + Constants.PROCESS_UPDATES_PATH;
+        String requestPath = exchange.getRequestPath();
+
+        if (requestPath.startsWith(processUpdatePath)) {
+            handleStatusUpdateRequests(exchange, processUpdatePath);
+        } else {
+            handleTerminalRequests(exchange, socketPath);
+        }
+    }
+
+    private void handleTerminalRequests(HttpServerExchange exchange, String socketPath) throws Exception {
+        String stringTermPath = socketPath + Constants.TERM_PATH_TEXT;
+        String silentTermPath = socketPath + Constants.TERM_PATH_SILENT;
+        String termPath = socketPath + Constants.TERM_PATH;
+        String requestPath = exchange.getRequestPath();
+
+        ResponseMode responseMode;
+        String invokerContext;
+
+        if (requestPath.startsWith(stringTermPath)) {
+            log.info("Connecting to string term ...");
+            responseMode = ResponseMode.TEXT;
+            invokerContext = requestPath.replace(stringTermPath, "");
+        } else if (requestPath.startsWith(silentTermPath)) {
+            log.info("Connecting to silent term ...");
+            responseMode = ResponseMode.SILENT;
+            invokerContext = requestPath.replace(silentTermPath, "");
+        } else {
+            log.info("Connecting to binary term ...");
+            responseMode = ResponseMode.BINARY;
+            invokerContext = requestPath.replace(termPath, "");
+        }
+        //strip /ro from invokerContext
+        if (invokerContext.toLowerCase().endsWith("/ro")) {
+            invokerContext = invokerContext.substring(0, invokerContext.length() - 3);
+        }
+        log.debug("Computed invokerContext [{}] from requestPath [{}] and termPath [{}]", invokerContext, requestPath, termPath);
+
+        boolean isReadOnly = requestPath.toLowerCase().endsWith("ro");
+        Term term = getTerm(invokerContext, appendReadOnlyChannel);
+        term.getWebSocketHandler(responseMode, isReadOnly).handleRequest(exchange);
+    }
+
+    private void handleStatusUpdateRequests(HttpServerExchange exchange, String processUpdatePath)
+            throws Exception {
+        log.info("Connecting status listener ...");
+        String requestPath = exchange.getRequestPath();
+        String invokerContext = requestPath.replace(processUpdatePath, "");
+        Term term = getTerm(invokerContext, appendReadOnlyChannel);
+        term.webSocketStatusUpdateHandler().handleRequest(exchange);
+    }
+
+    private Term getTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        return terms.computeIfAbsent(invokerContext, ctx -> createNewTerm(invokerContext, appendReadOnlyChannel));
+    }
+
+    private Term createNewTerm(String invokerContext, Optional<ReadOnlyChannel> appendReadOnlyChannel) {
+        log.info("Creating new term for context [{}].", invokerContext);
+        Runnable onDestroy = () -> terms.remove(invokerContext);
+        Term term = new Term(invokerContext, onDestroy, executor, appendReadOnlyChannel);
+        return term;
+    }
+
+    public Map<String, Term> getTerms() {
+        Map termsClone = new HashMap<>();
+        termsClone.putAll(terms);
+        return termsClone;
     }
 
     private void handleHttpRequests(HttpServerExchange exchange, String httpPath) throws Exception {
@@ -136,13 +224,6 @@ public class BootstrapUndertowBuildAgentHandlers extends UndertowBootstrap {
             return;
         }
         ResponseCodeHandler.HANDLE_404.handleRequest(exchange);
-    }
-
-    private String stripEndingSlash(String requestPath) {
-        if (requestPath.endsWith("/")) {
-            requestPath = requestPath.substring(0, requestPath.length() -1);
-        }
-        return requestPath;
     }
 
     private boolean pathMatches(String requestPath, String path) {

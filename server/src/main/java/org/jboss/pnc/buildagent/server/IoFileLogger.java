@@ -31,16 +31,16 @@ import java.util.function.Consumer;
 /**
  * @author <a href="mailto:matejonnet@gmail.opecom">Matej Lazar</a>
  */
-public class IoLogger implements Closeable {
+public class IoFileLogger implements Closeable {
 
-    Logger log = LoggerFactory.getLogger(IoLogger.class);
+    Logger log = LoggerFactory.getLogger(IoFileLogger.class);
     private Charset charset = Charset.defaultCharset();
     private Consumer<String> inputLogger;
     private Consumer<byte[]> outputLogger;
 
     FileOutputStream stream;
 
-    public IoLogger(Path logFolder) {
+    public IoFileLogger(Path logFolder) {
         try {
             Path logPath = logFolder.resolve("console.log");
 

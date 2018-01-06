@@ -29,6 +29,7 @@ import org.jboss.pnc.buildagent.server.TermdServer;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,12 +148,41 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0));
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
         completed.set(false);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0, "2nd-command."));
         Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
         completed.set(false);
+
+        buildAgentClient.close();
+    }
+
+    @Test
+    @Ignore //Readline is not thread safe
+    public void shouldEnqueueNewTasksWhenOneIsRunning() throws Exception {
+
+        String context = this.getClass().getName() + ".shouldEnqueueNewTasksWhenFirstIsRunning";
+
+        ObjectWrapper<Integer> completed = new ObjectWrapper<>(0);
+        Consumer<TaskStatusUpdateEvent> onStatusUpdate = (statusUpdateEvent) -> {
+            if (statusUpdateEvent.getNewStatus().equals(Status.COMPLETED) ) {
+                log.info("Received status COMPLETED.");
+                try {
+                    assertTestCommandOutputIsWrittenToLog(statusUpdateEvent.getTaskId());
+                } catch (TimeoutException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                completed.set(completed.get() + 1);
+            }
+        };
+
+        BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context);
+
+        buildAgentClient.executeCommand(getTestCommand(3, 1));
+        buildAgentClient.executeCommand(getTestCommand(3, 0, "2nd-command."));
+
+        Wait.forCondition(() -> completed.get() == 2, 100, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
 
         buildAgentClient.close();
     }
@@ -178,7 +208,7 @@ public class TestWebSocketConnection {
         BuildAgentClient buildAgentClient = new BuildAgentClient(terminalBaseUrl, Optional.empty(), onStatusUpdate, context, ResponseMode.SILENT, false);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0));
-        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout."); //TODO no need to wait, server should block new executions until there are running tasks
+        Wait.forCondition(() -> completed.get(), 10, ChronoUnit.SECONDS, "Command did not complete in given timeout.");
         completed.set(false);
 
         buildAgentClient.executeCommand(getTestCommand(100, 0, "2nd-command."));

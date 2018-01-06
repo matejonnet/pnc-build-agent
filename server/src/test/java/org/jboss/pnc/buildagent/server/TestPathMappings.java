@@ -40,8 +40,7 @@ public class TestPathMappings {
 
     @Test
     public void serverShouldListenOnRoot() throws BuildAgentException, InterruptedException, IOException {
-        BuildAgent buildAgent = new BuildAgent();
-        buildAgent.start(HOST, 0, "", Optional.empty(), null);
+        BuildAgentServer buildAgent = new BuildAgentServer(HOST, 0, "", Optional.empty(), null);
 
         HttpURLConnection connection200 = connectToUrl(buildAgent.getPort(), "");
         Assert.assertEquals("Unexpected http response code.", 200, connection200.getResponseCode());
@@ -55,8 +54,7 @@ public class TestPathMappings {
     @Test
     public void serverShouldListenOnPath() throws InterruptedException, IOException, BuildAgentException {
         String contextPath = "ctx-path";
-        BuildAgent buildAgent = new BuildAgent();
-        buildAgent.start(HOST, 0, "/" + contextPath, Optional.empty(), null);
+        BuildAgentServer buildAgent = new BuildAgentServer(HOST, 0, "/" + contextPath, Optional.empty(), null);
 
         HttpURLConnection connection200 = connectToUrl(buildAgent.getPort(), contextPath);
         Assert.assertEquals("Unexpected http response code.", 200, connection200.getResponseCode());

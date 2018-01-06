@@ -52,7 +52,6 @@ public class BuildAgentClient implements Closeable {
 
     private Client statusUpdatesClient;
     private Client commandExecutingClient;
-    private Optional<Runnable> onCommandExecutionCompleted = Optional.empty();
 
     public BuildAgentClient(String termBaseUrl,
                             Optional<Consumer<String>> responseDataConsumer,
@@ -80,27 +79,12 @@ public class BuildAgentClient implements Closeable {
         commandExecutingClient = connectCommandExecutingClient(termBaseUrl, responseDataConsumer, commandContext);
     }
 
-    public void setCommandCompletionListener(Runnable commandCompletionListener) {
-        this.onCommandExecutionCompleted = Optional.of(commandCompletionListener);
+    public void executeCommand(String command) throws BuildAgentClientException {
+        execute(command);
     }
 
-    public void executeCommand(String command) throws TimeoutException, BuildAgentClientException {
+    public void execute(Object command) throws BuildAgentClientException {
         log.info("Executing remote command [{}]...", command);
-        RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
-
-        ByteBuffer byteBuffer = prepareRemoteCommand(command);
-
-        try {
-            log.debug("Sending remote command...");
-            remoteEndpoint.sendBinary(byteBuffer);
-            log.debug("Command sent.");
-        } catch (IOException e) {
-            log.error("Cannot execute remote command.", e);
-        }
-    }
-
-    public void executeNow(Object command, boolean silent) throws BuildAgentClientException { //TODO unify with executeCommand
-        log.info("Executing remote command now [{}]...", command);
         RemoteEndpoint.Basic remoteEndpoint = commandExecutingClient.getRemoteEndpoint();
 
         ByteBuffer byteBuffer = prepareRemoteCommand(command);

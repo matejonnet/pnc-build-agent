@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.buildagent.client;
 
+import org.jboss.pnc.buildagent.api.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,14 +40,14 @@ import java.util.function.Consumer;
  */
 public class Client {
 
-    public static final String WEB_SOCKET_TERMINAL_PATH = "/socket/term"; //TODO use Configuration class
-    public static final String WEB_SOCKET_TERMINAL_TEXT_PATH = "/socket/text";
-    public static final String WEB_SOCKET_TERMINAL_SILENT_PATH = "/socket/silent";;
-    public static final String WEB_SOCKET_LISTENER_PATH = "/socket/process-status-updates";
+    public static final String WEB_SOCKET_TERMINAL_PATH = Constants.SOCKET_PATH + Constants.TERM_PATH;
+    public static final String WEB_SOCKET_TERMINAL_TEXT_PATH = Constants.SOCKET_PATH + Constants.TERM_PATH_TEXT;
+    public static final String WEB_SOCKET_TERMINAL_SILENT_PATH = Constants.SOCKET_PATH + Constants.TERM_PATH_SILENT;
+    public static final String WEB_SOCKET_LISTENER_PATH = Constants.SOCKET_PATH + Constants.PROCESS_UPDATES_PATH;
 
     private static final Logger log = LoggerFactory.getLogger(Client.class);
 
-    ProgramaticClientEndpoint endpoint = new ProgramaticClientEndpoint();
+    private ProgramaticClientEndpoint endpoint = new ProgramaticClientEndpoint();
     private Consumer<Session> onOpenConsumer;
     private Consumer<String> onStringMessageConsumer;
     private Consumer<byte[]> onBinaryMessageConsumer;
@@ -62,7 +63,6 @@ public class Client {
     public void close() throws Exception {
         log.debug("Client is closing connection.");
         endpoint.session.close();
-//        endpoint.closeLatch.await(10, TimeUnit.SECONDS);
     }
 
     public void onOpen(Consumer<Session> onOpen) {
@@ -97,7 +97,6 @@ public class Client {
             log.debug("Client received open.");
             this.session = session;
 
-            //  TODO make it optional to connect to log socket. Note that the same client class is used for status updates.
             session.addMessageHandler(new MessageHandler.Whole<String>() {
                 @Override
                 public void onMessage(String message) {
@@ -107,7 +106,6 @@ public class Client {
                     }
                 }
             });
-            //TODO make it optional to connect to log socket. Note that the same clien class is used for status updates.
             session.addMessageHandler(new MessageHandler.Whole<byte[]>() {
                 @Override
                 public void onMessage(byte[] bytes) {

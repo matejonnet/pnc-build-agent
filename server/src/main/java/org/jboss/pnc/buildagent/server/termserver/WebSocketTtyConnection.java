@@ -53,7 +53,7 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
     private Runnable onStdOutCompleted;
 
     public WebSocketTtyConnection(ScheduledExecutorService executor, Runnable onStdOutCompleted) {
-        super(StandardCharsets.US_ASCII, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        super(StandardCharsets.UTF_8, new Vector(Integer.MAX_VALUE, Integer.MAX_VALUE));
         this.executor = executor;
         this.onStdOutCompleted = onStdOutCompleted;
     }
@@ -61,7 +61,7 @@ public class WebSocketTtyConnection extends HttpTtyConnection implements TtyConn
     protected void write(byte[] buffer) {
         if (isOpen()) {
             if (ResponseMode.TEXT.equals(responseMode)) {
-                WebSockets.sendText(new String(buffer, StandardCharsets.US_ASCII), webSocketChannel, null);
+                WebSockets.sendText(new String(buffer, StandardCharsets.UTF_8), webSocketChannel, null);
             } else if (ResponseMode.BINARY.equals(responseMode)) {
                 WebSockets.sendBinary(ByteBuffer.wrap(buffer), webSocketChannel, null);
             } else if (ResponseMode.SILENT.equals(responseMode)) {

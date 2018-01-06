@@ -16,16 +16,18 @@
  * limitations under the License.
  */
 
-package org.jboss.pnc.buildagent.server.termserver;
+package org.jboss.pnc.buildagent.api;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class Configurations {
-  public static final String HOST = "localhost";
+public class Constants {
+  public static final String HTTP_PATH = "/";
+  public static final String SOCKET_PATH = "/socket";
+  public static final String SERVLET_PATH = "/servlet";
   public static final String TERM_PATH = "/term";
   public static final String TERM_PATH_TEXT = "/text";
-  public static final String TERM_PATH_SILENT = "/silent";
 
+  public static final String TERM_PATH_SILENT = "/silent";
   public static final String PROCESS_UPDATES_PATH = "/process-status-updates";
 }

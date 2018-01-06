@@ -43,7 +43,7 @@ public class ReadOnlyWebSocketTextChannel implements ReadOnlyChannel {
 
     @Override
     public void writeOutput(byte[] buffer) {
-        String string = new String(buffer, StandardCharsets.US_ASCII);
+        String string = new String(buffer, StandardCharsets.UTF_8);
         log.trace("Appending to message [{}], raw [{}]", string, buffer);
         stringLiner.append(string);
         String line;

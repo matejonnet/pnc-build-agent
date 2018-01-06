@@ -65,7 +65,7 @@ public class Main {
             logPath = Optional.empty();
         }
         String bindPath = getOption(cmd, "c", "");
-        new BuildAgent().start(host, port, bindPath, logPath, () -> {});
+        new BuildAgentServer(host, port, bindPath, logPath, () -> {});
     }
 
     private static String getOption(CommandLine cmd, String opt, String defaultValue) {

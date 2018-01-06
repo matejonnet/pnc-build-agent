@@ -38,10 +38,13 @@ var output = document.getElementById("output");
 
 console.log(output.innerHTML);
 
-//var socket = new WebSocket("ws://localhost:8080/socket/term");
+var hostport = location.hostname+(location.port ? ':'+location.port : '');
+
+//var socket = new WebSocket("ws://" + hostport + "/socket/term");
 //socket.binaryType = 'arraybuffer';
 //socket.onmessage = handleReceivedBinary;
-var socket = new WebSocket("ws://localhost:8080/socket/text");
+
+var socket = new WebSocket("ws://" + hostport + "/socket/text");
 socket.onmessage = handleReceivedText;
 
 
