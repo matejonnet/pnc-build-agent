@@ -32,7 +32,7 @@
 
   <properties>
     <version.io.termd>1.1.9</version.io.termd>
-    <version.undertow>2.2.3.Final</version.undertow>
+    <version.undertow>2.2.11.Final</version.undertow>
     <version.junit>4.13.1</version.junit>
     <version.org.slf4j>1.7.25</version.org.slf4j>
     <version.commons-cli>1.4</version.commons-cli>
